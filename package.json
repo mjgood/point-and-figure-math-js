@@ -1,0 +1,36 @@
+{
+  "name": "point-and-figure-math",
+  "version": "1.0.0",
+  "description": "Math to convert an array of stock history to a Point and Figure data structure",
+  "main": "point-and-figure-math.js",
+  "scripts": {
+    "test": "nodejs demo.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mjgood/point-and-figure-math-js.git"
+  },
+  "keywords": [
+    "point",
+    "and",
+    "figure",
+    "stock",
+    "analysis",
+    "data",
+    "structure",
+    "math",
+    "chart",
+    "finance",
+    "fintech",
+    "history"
+  ],
+  "author": {
+    "name" : "Michael Good",
+    "email" : "mjgood91@gmail.com"
+  }
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mjgood/point-and-figure-math-js/issues"
+  },
+  "homepage": "https://github.com/mjgood/point-and-figure-math-js#readme"
+}
