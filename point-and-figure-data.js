@@ -28,9 +28,37 @@ const defaultBoxSizes = [
     },
 ];
 
-function pfData(reversal, boxSizes) {
-    if (reversal == null) { reversal = defaultReversal; }
-    if (boxSizes == null) { boxSizes = defaultBoxSizes; }
+// parameters are the following:
+//     reversal : integer, optional
+//     boxSizes : array (of JSON objects, see default boxSizes), optional
+//     percent : float, optional
+
+function pfData(parameters) {
+    if (parameters == null) {
+        parameters = {};
+    }
+    else if (typeof parameters != "object") {
+        throw new Error("Parameters have been changed to JSON format in point-and-figure-data 1.1.0");
+        return;
+    }
+
+    var reversal = parameters.reversal || defaultReversal;
+    var percent = parameters.percent || false;
+    var boxSizes;
+
+    if (typeof percent == "number") {
+        this.percentScale = 1 + (percent / 100);
+        boxSizes = [
+            {
+                min : 1,
+                max : this.percentScale,
+                size : this.percentScale - 1
+            }
+        ];
+    }
+    else {
+        boxSizes = parameters.boxSizes || defaultBoxSizes;
+    }
 
     this.bars = [];                                          // the set of point and figure bars from newest to oldest
     this.reversal = reversal;                                // minimum amount needed for a reversal
@@ -130,6 +158,26 @@ function pfData(reversal, boxSizes) {
 
     // functions for the box size
     this.boxWorker = {
+        // adds a box to the top or bottom of a percent box array
+        addBoxPercent: (whichEnd) => {
+            if (whichEnd == "top") {
+                var lastBoxSize = this.boxSizes[this.boxSizes.length - 1];
+                this.boxSizes.push({
+                    min : lastBoxSize.max,
+                    max : lastBoxSize.max * this.percentScale,
+                    size : ((lastBoxSize.max * this.percentScale) - lastBoxSize.max)
+                });
+            }
+            else if (whichEnd == "bottom") {
+                var nextBoxSize = this.boxSizes[0];
+                this.boxSizes.unshift({
+                    min : nextBoxSize.min / this.percentScale,
+                    max : nextBoxSize.min,
+                    size : (nextBoxSize.min - (nextBoxSize.min / this.percentScale))
+                });
+            }
+        },
+
         // returns the price in terms of a box
         boxPrice : (priceCheck, type) => {
             var cSize = this.boxWorker.boxSize(priceCheck);
@@ -146,10 +194,25 @@ function pfData(reversal, boxSizes) {
 
         // returns the box size based on the price
         boxSize : (priceCheck) => {
+            var boxSizes = this.boxSizes;
             for (var i = 0; i < boxSizes.length; i++) {
                 var cSize = boxSizes[i];
-                if (priceCheck >= cSize.min && priceCheck <= cSize.max) {
+
+                // if percents are enabled, add more boxes as needed
+                if ((this.percentScale != null) && (i == 0) && (priceCheck < cSize.min)) {
+                    this.boxWorker.addBoxPercent("bottom");
+                    boxSizes = this.boxSizes;
+                    i--;
+                }
+                // check the current box to see if we are within its bounds
+                else if (priceCheck >= cSize.min && priceCheck <= cSize.max) {
                     return cSize.size;
+                }
+                // if percents are enabled, add more boxes as needed
+                else if ((this.percentScale != null) && (i == boxSizes.length - 1) && (priceCheck > cSize.max)) {
+                    this.boxWorker.addBoxPercent("top");
+                    boxSizes = this.boxSizes;
+                    this.boxSizes = boxSizes;
                 }
             }
         },
@@ -173,6 +236,12 @@ function pfData(reversal, boxSizes) {
                 direction = -1;
                 while (startVal <= this.boxSizes[boxRef].min) {
                     boxRef = boxRef - 1;
+
+                    // if this is a percent P&F, add extra boxes as needed
+                    if (this.percentScale != null && boxRef < 0) {
+                        this.boxWorker.addBoxPercent("bottom");
+                        boxRef = 0;
+                    }
                 }
             }
             else if (type == "X" || startVal < endVal) {
@@ -180,6 +249,11 @@ function pfData(reversal, boxSizes) {
                 direction = 1;
                 while (startVal >= this.boxSizes[boxRef].max) {
                     boxRef = boxRef + 1;
+
+                    // if this is a percent P&F, add extra boxes as needed
+                    if (this.percentScale != null && boxRef >= this.boxSizes.length) {
+                        this.boxWorker.addBoxPercent("top");
+                    }
                 }
             }
 
@@ -188,6 +262,16 @@ function pfData(reversal, boxSizes) {
                 if ((direction < 0 && priceAt <= this.boxSizes[boxRef].min) ||
                     (direction > 0 && priceAt >= this.boxSizes[boxRef].max)) {
                         boxRef += direction;
+
+                        // if this is a percent P&F, add extra boxes as needed
+                        if (this.percentScale != null && this.boxSizes[boxRef] == null) {
+                            if (direction > 0) {
+                                this.boxWorker.addBoxPercent("top");
+                            }
+                            else {
+                                this.boxWorker.addBoxPercent("bottom");
+                            }
+                        }
                 }
 
                 priceAt += this.boxSizes[boxRef].size * direction;
@@ -202,8 +286,8 @@ function pfData(reversal, boxSizes) {
 // returns a pfData object representing a point & figure data structure built from historical price data
 // it assumes data is an array of json with {date, high, low, close} properties set
 // it also assumes the array is sorted newest date to oldest date
-function convert(data, reversal, boxSizes) {
-    var myPfData = new pfData(reversal, boxSizes);
+function convert(data, parameters) {
+    var myPfData = new pfData(parameters);
 
     if (data.length > 0) {
          myPfData.barWorker.newBarFromData(data[data.length - 1]);
